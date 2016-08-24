@@ -1,0 +1,64 @@
+--- 
+name: acme-device-settings
+namespace: com.acme.adc.stylebooks.devices
+version: "1.0"
+display-name: "ACME Device Global Settings StyleBook"
+description: "This stylebook sets global settings for ACME's NetScaler devices."
+schema-version: "1.0"
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "10.5"
+components:
+    -
+        name: nsfeatures-comp
+        type: ns::nsfeature
+        meta-properties:
+            action: enable
+        properties:
+            feature:
+                - WL
+                - SP
+                - LB
+                - CS
+                - CMP
+                - SSL
+                - GSLB
+                - IC
+                - AAA
+                - REWRITE
+                - AppFw
+                - RESPONDER
+                - FEO
+    -
+        name: nsmode-comp
+        type: ns::nsmode
+        meta-properties:
+            action: enable
+        properties:
+            mode:
+                - FR
+                - L3
+                - Edge
+                - USNIP
+                - PMTUD
+    -
+        name: systemparams-comp
+        type: ns::systemparameter
+        properties:
+            natpcbforceflushlimit: 4294967295
+    -
+        name: locationdata-clear-comp
+        type: ns::locationdata
+        meta-properties:
+            action: clear
+    -
+        name: apply-pbrs
+        type: ns::nspbrs
+        meta-properties:
+            action: apply
+
+
+
+
