@@ -55,7 +55,7 @@ parameters:
                 name: password
                 label: Password
                 description: "The password of the VPN user"
-                type: password
+                type: string
                 required: true
     -
         name: groupname
