@@ -190,14 +190,13 @@ components:
             policy: $components.authz-policy-comp.properties.name
     -
         name: vpn-aaagroup-intranetip-binding-comp
-        type: ns::aaagroup_intranetip_binding
+        type: ns::aaagroup_intranetapplication_binding
         description: |
             This StyleBook component creates a Nitro configuration object that binds 
             the Intranet subnet (intranetip/netmask) to the AAA Group
         properties:
             groupname: $components.group-comp.properties.groupname
-            intranetip: $parameters.intranetApp-ip
-            netmask: $parameters.intranetApp-netmask
+            intranetapplication: $components.vpn-intranetapp-comp.properties.intranetApplication
     -
         name: vpn-aaagroup-intranetapp-binding-comp
         type: ns::aaagroup_vpnintranetapplication_binding
