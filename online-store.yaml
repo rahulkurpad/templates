@@ -1,0 +1,186 @@
+name: online-store-app
+namespace: com.acme-corp.stylebooks
+version: "1.0"
+display-name: "Online Store"
+description: |
+  NetScaler configuration for the online store component
+schema-version: "1.0"
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    version: "10.5"
+    prefix: ns
+  - 
+    namespace: com.citrix.adc.stylebooks
+    version: "1.0"
+    prefix: stlb
+  -
+    namespace: com.citrix.adc.commontypes
+    version: "1.0"
+    prefix: cmtypes
+parameters:
+  - 
+    name: name
+    label: "Name"
+    description: "Give this configuration a name"
+    type: string
+    required: true
+    key: true
+  - 
+    name: vip
+    label: "Application Virtual IP address"
+    description: "The VIP IP that front-ends this app"
+    type: ipaddress
+    required: true
+  -
+    name: certificate
+    label: "VIP Certificate File"
+    description: "The file path of the server certificate used on this VIP"
+    type: certfile
+  -
+    name: key
+    label: "VIP Certificate Key File"
+    description: "The file path of the server certificate's private key used on this VIP"
+    type: keyfile
+  -
+    name: ca-certificate
+    label: "VIP CA Certificate File"
+    description: "The file path of the CA certificate used to sign the server certificate"
+    type: certfile
+  - 
+    name: server-pools
+    label: "Server Pools"
+    description: |
+        Server Pools with rules that direct client requests to the right pool of servers.
+        If a pool doesn't have a rule, it is considered the default pool for this 
+        content-switching config.
+    type: object[]
+    parameters:
+      -
+        name: pool-name
+        label: "Pool name"
+        description: "Name of the pool of servers"
+        type: string
+        required: true
+      -
+        name: server-ips
+        label: "Servers IP "
+        description: "IP addresses of servers that are part of this pool"
+        type: ipaddress[]
+        required: true
+      -
+        name: rule
+        label: "Rule Expression"
+        description: "NetScaler PI rule expression. Client requests that match this expression are served by this pool"
+        type: string
+  -
+    name: monitor-interval
+    label: "Monitor Interval"
+    description: "The interval (in seconds) between successive probes to monitor the health of app servers"
+    type: number
+    default: 20
+substitutions:
+  cs-port[]:
+    HTTP: int("80")
+    SSL: int("443")
+components:
+  -
+    name: cs-default-lb
+    type: stlb::cs-lb-mon
+    description: |
+      Creates the cs-lb-mon configuration with only the default-lb-pool.
+      A default-lb-pool is one where the rule is not specified.
+    condition: $parameters.server-pools
+    repeat: $parameters.server-pools
+    repeat-item: pool
+    repeat-condition: not $pool.rule
+    properties:
+      appname: cs-app
+      cs-virtual-ip: $parameters.vip
+      cs-virtual-port: $substitutions.cs-port("HTTP")
+      cs-service-type: SSL
+      default-lb-pool:
+        lb-appname: $pool.pool-name
+        lb-service-type: HTTP
+        lb-virtual-ip: 0.0.0.0
+        lb-virtual-port: 0
+        svc-server-port: 80
+        svc-service-type: HTTP
+        svc-server-ips: $pool.server-ips
+        monitors:
+          -
+            monitorname: $pool.pool-name
+            type: PING
+            interval: $parameters.monitor-interval
+            interval_units: SEC
+            retries: 3
+  -
+    name: cs-pools
+    type: stlb::cs-lb-mon
+    description: |
+      Updates the cs-lb-mon configuration with the different pools provided.
+      Each pool with rule result in a dummy LB vserver, cs action, cs policy, 
+      and csvserver_cspolicy_binding configuration. 
+    condition: $parameters.server-pools
+    repeat: $parameters.server-pools
+    repeat-item: pool
+    repeat-condition: $pool.rule
+    repeat-index: ndx
+    properties:
+      appname: cs-app
+      cs-virtual-ip: $parameters.vip
+      cs-virtual-port: $substitutions.cs-port("HTTP")
+      cs-service-type: "SSL"
+      default-lb-pool?: $components.cs-default-lb.properties.default-lb-pool
+      pools:
+        -
+          lb-pool:
+            lb-appname: $pool.pool-name
+            lb-service-type: HTTP
+            lb-virtual-ip: 0.0.0.0
+            lb-virtual-port: 0
+            svc-server-port: 80
+            svc-service-type: HTTP
+            svc-server-ips: $pool.server-ips
+            monitors:
+              -
+                monitorname: $pool.pool-name
+                type: PING
+                interval: $parameters.monitor-interval
+                interval_units: SEC
+                retries: 3
+          rule: "true"
+          priority: $ndx+1
+  -
+    name: cs-server-certificate
+    type: stlb::vserver-certs-binds
+    description: |
+      Binds csvserver with server certificate
+    condition: $parameters.server-pools and $parameters.certificate and $parameters.key
+    properties:
+      vserver-name: $components.cs-pools.outputs.csvserver.properties.name
+      certificates:
+        -
+          cert-name: cs-cert
+          cert-file: $parameters.certificate
+          ssl-inform: PEM
+          key-name: cs-key
+          key-file: $parameters.key
+  -
+    name: cs-ca-certificate
+    type: stlb::vserver-certs-binds
+    description: |
+      Binds csvserver with CA certificate
+    condition: $parameters.server-pools and $parameters.ca-certificate
+    properties:
+      vserver-name: $components.cs-pools.outputs.csvserver.properties.name
+      certificates:
+        -
+          cert-name: cs-ca-cert
+          cert-file: $parameters.ca-certificate
+          ssl-inform: PEM
+          cert-advanced:
+            is-ca-cert: true
+            skip-ca-name: false
+            expiry-monitor: ENABLED
+            notification-period: 20
